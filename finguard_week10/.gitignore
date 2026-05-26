@@ -1,0 +1,23 @@
+﻿# --- Python ---
+backend/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# --- Node / Vite ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- runtime / scratch ---
+*.log
+*.pid
+test_check/

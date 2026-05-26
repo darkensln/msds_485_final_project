@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* react-flow node tier colors */
+.tier-external  { background: #0B1D3A; color: white; }
+.tier-raw       { background: #028090; color: white; }
+.tier-privacy   { background: #F4A261; color: #0B1D3A; }
+.tier-consumption { background: #02C39A; color: #0B1D3A; }
+.tier-consumer  { background: #E63946; color: white; }
