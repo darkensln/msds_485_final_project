@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from .rbac import role_can_read, mask_row, ROLE_POLICY
+from .rbac import role_can_read, mask_row, ROLE_POLICY, vault_erase
 
 
 TABLES = [
@@ -115,13 +115,52 @@ class DataStore:
             self._log(role, "DENY", f"erasure request for {customer_id}")
             return {"ok": False, "error":
                     "Only CDO/DPO may submit GDPR erasure requests."}
+
+        # Guard against duplicate erasure for the same customer.
+        # Once GDPR Art. 17 is executed, the same request cannot be processed
+        # again -- the customer's PII is already gone from every table and
+        # vault entries are already shredded. A duplicate submission is a
+        # process error (or a UI replay) and should be refused.
+        with self._lock:
+            already = next((e for e in self._erasures
+                            if e["customer_id"] == customer_id), None)
+        if already:
+            self._log(role, "DENY",
+                      f"duplicate erasure for {customer_id} (already {already['id']})")
+            return {"ok": False, "error":
+                    f"Customer {customer_id} was already erased "
+                    f"(request {already['id']} on {already['ts'][:10]}). "
+                    f"GDPR Art. 17 erasures are one-time and irreversible."}
+
         # Simulate cascade across tables containing this customer.
         impacted: Dict[str, int] = {}
+        names_erased: set[str] = set()
         for t in ("aml_transactions", "bank_marketing_customers"):
             rows = self._load_table(t)
-            hits = sum(1 for r in rows if r.get("customer_id") == customer_id)
+            hits = 0
+            for r in rows:
+                if r.get("customer_id") == customer_id:
+                    hits += 1
+                    # Cryptographically erase the customer's PII from the vault.
+                    for field in ("customer_name", "customer_email", "customer_phone",
+                                  "customer_address", "full_name", "email", "phone",
+                                  "address"):
+                        v = r.get(field)
+                        if v:
+                            names_erased.add(v)
             if hits:
                 impacted[t] = hits
+
+        # If the customer doesn't exist in any table, refuse the request.
+        if not impacted:
+            self._log(role, "DENY", f"erasure for {customer_id} - customer not found")
+            return {"ok": False, "error":
+                    f"Customer {customer_id} not found in any table. "
+                    f"Nothing to erase."}
+
+        # Vault erasure (cryptographic Art. 17 — the token survives but no
+        # longer reverses to the original)
+        vault_records_removed = sum(vault_erase(v) for v in names_erased)
         req = {
             "id": f"ERA-{len(self._erasures)+1:04d}",
             "ts": dt.datetime.utcnow().isoformat() + "Z",
@@ -129,6 +168,7 @@ class DataStore:
             "requested_by": role,
             "reason": reason or "GDPR Art. 17 — Right to Erasure",
             "tables_impacted": impacted,
+            "vault_records_removed": vault_records_removed,
             "status": "Completed (cascade + vault unmap)",
         }
         with self._lock:
