@@ -1,113 +1,101 @@
-# FinGuard — Week 10 Final Deliverables
+# FinGuard — Week 10 Console
 
-The final-week console for the FinGuard Borderless Banking project: a
-searchable Data Catalog, Lineage graph, Compliance Dashboard, and GDPR
-Article 17 erasure workflow, plus a full project recap deck.
+Searchable Data Catalog, Lineage graph, Compliance Dashboard, GDPR Article 17 erasure workflow, and a
+UNESCO AI-ethics crosswalk, all gated by the role you're signed in as. Plus the Week 8 fairness notebook.
+
+## Run it
+
+Needs **Python 3.9+** and **Node 18+**.
+
+**Mac / Linux**
+
+```bash
+cd finguard_week10
+chmod +x *.sh        # first time only
+./setup.sh           # first time only: Python venv + npm install
+./start-demo.sh      # opens backend + frontend (or run ./run-backend.sh and ./run-frontend.sh in two terminals)
+```
+
+**Windows:** `setup.cmd`, then `start-demo.cmd` (details in `RUN_ON_WINDOWS.md`).
+
+Open <http://localhost:5173>. API docs: <http://localhost:8000/docs>.
+
+If the frontend says `vite: command not found`, the Node packages aren't installed — re-run `./setup.sh`.
+
+Manual start (any OS):
+
+```bash
+cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+uvicorn app.main:app --reload --reload-dir app --port 8000
+# second terminal
+cd frontend && npm install && npm run dev
+```
+
+The backend reads `data/FinGuard_Data_Catalog.xlsx` and `data/synthetic/*.csv` by default; override with
+`FINGUARD_CATALOG` / `FINGUARD_DATA_DIR`.
 
 ## What's in this folder
 
 ```
 finguard_week10/
-├── README.md                ← you are here
-├── DEMO_RUNBOOK.md          ← 5-minute live-demo script
-├── FinGuard_Week10_Final.pptx   ← full project recap deck (18 slides)
-├── backend/
-│   ├── app/
-│   │   ├── main.py          ← FastAPI app (12 endpoints)
-│   │   ├── catalog.py       ← reads FinGuard_Data_Catalog.xlsx
-│   │   ├── lineage.py       ← system + column-level lineage graph
-│   │   ├── rbac.py          ← 7-role masking engine
-│   │   └── store.py         ← CSV data layer + audit log + erasure cascade
-│   ├── requirements.txt
-│   └── README.md
-└── frontend/
-    ├── src/
-    │   ├── App.jsx          ← shell + role switcher + tab router
-    │   ├── api.js           ← thin fetch wrapper
-    │   └── components/
-    │       ├── CatalogView.jsx       ← Deliverable B: searchable catalog
-    │       ├── ColumnDetail.jsx      ← per-column drill-in (lineage + sample)
-    │       ├── LineageView.jsx       ← Deliverable A: react-flow graph
-    │       ├── DashboardView.jsx     ← Deliverable C: KPIs, charts, logs
-    │       └── ErasureView.jsx       ← Deliverable D: GDPR Art. 17
-    ├── index.html
-    ├── package.json
-    ├── vite.config.js
-    ├── tailwind.config.js
-    └── README.md
+├── week8_fairness_audit.ipynb   ← Week 8: four-fifths rule + significance tests (pip install -r requirements-notebook.txt)
+├── DEMO_RUNBOOK.md              ← live-demo script
+├── FinGuard_Week10_Final.pptx   ← final deck
+├── data/                        ← catalog workbook + 7 synthetic tables (33,197 rows)
+├── backend/app/
+│   ├── main.py      ← FastAPI app (15 endpoints)
+│   ├── catalog.py   ← reads the 98-column catalog
+│   ├── lineage.py   ← system + column-level lineage graph
+│   ├── rbac.py      ← 7-role masking engine
+│   ├── vault.py     ← AES-256-GCM token vault (tokenize / role-gated detokenize / erase)
+│   ├── ethics.py    ← UNESCO AI-ethics crosswalk (10 principles → 30 controls)
+│   └── store.py     ← CSV data layer, audit log, GDPR erasure cascade
+└── frontend/src/components/
+    ├── CatalogView.jsx · ColumnDetail.jsx · LineageView.jsx
+    ├── DashboardView.jsx · ErasureView.jsx · EthicsView.jsx
 ```
 
-## The four Week 10 deliverables
+## Access model
 
-| Deliverable               | Where to find it                                            |
-| ------------------------- | ----------------------------------------------------------- |
-| **A — Data Lineage**      | Frontend "Lineage" tab; backend `/api/lineage/{system,columns}` |
-| **B — Web Data Catalog**  | Frontend "Data Catalog" tab; backend `/api/catalog`        |
-| **C — Compliance Dashboard** | Frontend "Compliance Dashboard" tab; backend `/api/compliance/*` |
-| **D — Final Presentation**| `FinGuard_Week10_Final.pptx` (18 slides)                    |
+| Role | Sees raw PII | Can decrypt vault tokens | Can submit GDPR erasure | Tables denied |
+|---|:-:|:-:|:-:|---|
+| Chief Data Officer (CDO) | ✔ | ✔ | ✔ | none |
+| Data Privacy Officer (DPO) | ✔ | ✔ | ✔ | none |
+| AML Compliance Officer | | | | `bank_marketing_customers` |
+| Data Engineer | | | | none (masked) |
+| Data Analyst | | | | none (masked) |
+| IT Security Admin | | | | none (masked; administers vault keys, cannot decrypt) |
+| External Auditor | | | | none (read-only, masked) |
 
-The GDPR Article 17 erasure workflow lives in the "GDPR Erasure" tab and is
-documented in slide 14 of the deck.
+Every read and denial is written to the audit log shown on the Compliance Dashboard.
 
-## Running the console (5 minutes)
+**Masking methods:** pseudonymisation (vault-backed, reversible by DPO/CDO), SHA-256 hashing (emails,
+device IDs), partial masking (phones), generalisation (addresses → city/region), decade age bands (DOB, age),
+truncation (IP, ZIP), format-preserving tokens (account numbers, EINs).
 
-In **terminal 1** (backend):
+## Quick proofs (curl)
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+# Same row, two roles
+curl "localhost:8000/api/tables/aml_transactions/sample?role=data_analyst&limit=1"
+curl "localhost:8000/api/tables/aml_transactions/sample?role=dpo&limit=1"
+
+# Decrypt a token: analyst → 403, DPO → 200
+curl -X POST localhost:8000/api/vault/detokenize -H 'content-type: application/json' \
+     -d '{"token":"NAME_20CCDFBE","role":"data_analyst"}'
+
+# GDPR erasure (second identical request is refused)
+curl -X POST localhost:8000/api/compliance/erasure -H 'content-type: application/json' \
+     -d '{"customer_id":"CUST-00099","role":"dpo"}'
 ```
 
-In **terminal 2** (frontend):
+Tokens only enter the vault when a masked role views a row, so **view a customer's rows as Data Analyst
+before erasing them** if you want the erasure to report vault records removed.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Demo-state notes
 
-Open <http://localhost:5173>. The frontend Vite dev server proxies `/api/*`
-to <http://localhost:8000>, so no extra config is needed.
-
-If the catalog/data files live elsewhere, point the backend at them:
-
-```bash
-export FINGUARD_CATALOG=/abs/path/to/FinGuard_Data_Catalog.xlsx
-export FINGUARD_DATA_DIR=/abs/path/to/FinGuard_Synthetic_Datasets
-uvicorn app.main:app --reload --port 8000
-```
-
-## Sources of truth
-
-The backend is intentionally cheap to run — it reads from the existing
-project artifacts rather than requiring a running PostgreSQL:
-
-- **`../FinGuard_Data_Catalog.xlsx`** — 98 columns × 14 catalog attributes
-- **`../FinGuard_Synthetic_Datasets/*.csv`** — 7 raw tables, 33,197 rows
-- **`../FinGuard_Week6_Masked_Data/`** — masked datasets + mapping vault (referenced for narrative)
-- **`../FinGuard_Week7_RACI_RBAC.xlsx`** — RACI matrix + RBAC permission matrix (referenced for narrative)
-
-The PostgreSQL schema from `../FinGuard_RBAC_PostgreSQL.sql` remains the
-production blueprint; the FastAPI layer mirrors its role/permission model
-so you can swap CSV reads for SQL queries without changing the API surface.
-
-## RBAC enforcement (live)
-
-The role switcher in the header drives masking on every sample-data call:
-
-| Role            | Sees raw PII | Vault access | Tables denied         |
-| --------------- | :----------: | :----------: | --------------------- |
-| CDO             | ✔            | ✔            | none                  |
-| DPO             | ✔            | ✔            | none                  |
-| AML Officer     |              |              | `bank_marketing_customers` |
-| Data Engineer   |              |              | none (masked)         |
-| Data Analyst    |              |              | none (masked)         |
-| IT Security     |              | ✔            | none (masked)         |
-| External Auditor|              |              | none (read-only)      |
-
-Every read/deny is written to the in-memory audit log and visible on the
-Compliance Dashboard.
-
-See [DEMO_RUNBOOK.md](./DEMO_RUNBOOK.md) for the live-demo script.
+- Audit log, erasure history and vault live in memory and reset on restart. Four historical erasures and
+  180 audit entries are seeded on startup.
+- The vault key is ephemeral unless `FINGUARD_VAULT_KEY` is set (32-byte base64). In production it would come
+  from a KMS.
+- "Active SARs" and "Quality gate pass" on the dashboard are illustrative values and are labelled as such.

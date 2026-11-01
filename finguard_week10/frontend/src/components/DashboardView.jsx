@@ -26,12 +26,12 @@ export default function DashboardView() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPI label="PII columns masked" value={`${m.pii_masked_columns}/${m.pii_columns}`} sub="100% coverage" />
-        <KPI label="Vault entries (AES-256)" value={m.vault_entries.toLocaleString()} sub="Reversible mapping" />
-        <KPI label="GDPR erasures processed" value={m.erasures_processed} sub="Art. 17 cascade" color="text-finguard-mint" />
-        <KPI label="RBAC denials (30d)" value={m.access_denials_30d} sub="From audit log" color="text-finguard-red" />
-        <KPI label="Active SARs" value={m.active_sars} sub="AML reporting" color="text-finguard-accent" />
-        <KPI label="Quality gate pass" value={`${(m.quality_gate_pass_rate * 100).toFixed(1)}%`} sub="ETL stages" />
+        <KPI label="PII columns masked" value={`${m.pii_masked_columns}/${m.pii_columns}`} sub={`${Math.round(100*m.pii_masked_columns/m.pii_columns)}% coverage`} />
+        <KPI label={m.vault?.enabled ? `Vault entries (${m.vault.algorithm}, live)` : "Vault entries (Week 6 map)"} value={(m.vault?.enabled ? m.vault.entries : m.vault_entries).toLocaleString()} sub={m.vault?.enabled ? "Fills as masked rows are viewed" : "Static reverse mapping"} />
+        <KPI label="GDPR erasures processed" value={m.erasures_processed} sub="Incl. 4 seeded demo records" color="text-finguard-mint" />
+        <KPI label="RBAC denials (30d)" value={m.access_denials_30d} sub="Audit log (incl. seeded demo history)" color="text-finguard-red" />
+        <KPI label="Active SARs" value={m.active_sars} sub="Illustrative demo value" color="text-finguard-accent" />
+        <KPI label="Quality gate pass" value={`${(m.quality_gate_pass_rate * 100).toFixed(1)}%`} sub="Illustrative demo value" />
         <KPI label="DQ columns flagged" value={m.dq_columns_with_issue} sub="6 dimensions" />
         <KPI label="Tables governed" value={m.tables_governed} sub={`${m.columns_governed} columns`} />
       </div>

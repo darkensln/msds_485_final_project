@@ -5,12 +5,14 @@ import ColumnDetail from './components/ColumnDetail.jsx';
 import LineageView from './components/LineageView.jsx';
 import DashboardView from './components/DashboardView.jsx';
 import ErasureView from './components/ErasureView.jsx';
+import EthicsView from './components/EthicsView.jsx';
 
 const TABS = [
   { id: 'catalog',   label: 'Data Catalog' },
   { id: 'lineage',   label: 'Lineage' },
   { id: 'dashboard', label: 'Compliance Dashboard' },
   { id: 'erasure',   label: 'GDPR Erasure' },
+  { id: 'ethics',    label: 'AI Ethics (UNESCO)' },
 ];
 
 export default function App() {
@@ -101,11 +103,12 @@ export default function App() {
         {tab === 'lineage'   && <LineageView />}
         {tab === 'dashboard' && <DashboardView />}
         {tab === 'erasure'   && <ErasureView role={role} />}
+        {tab === 'ethics'    && <EthicsView />}
       </main>
 
       <footer className="max-w-7xl mx-auto px-6 py-6 text-xs text-slate-500">
-        FinGuard · 7 datasets · 33,197 records · 98 columns · 24 PII fields ·
-        28,893 vault entries · 7 roles enforced
+        FinGuard · 7 datasets · 33,197 records · 98 columns · 26 PII columns (24 masked) ·
+        AES-256-GCM vault · 7 roles enforced
       </footer>
     </div>
   );

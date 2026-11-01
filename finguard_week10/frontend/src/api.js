@@ -53,4 +53,11 @@ export const api = {
   audit:          (limit = 100) => get('/compliance/audit?limit=' + limit),
   erasures:       () => get('/compliance/erasures'),
   submitErasure:  (body) => post('/compliance/erasure', body),
+
+  // UNESCO AI Ethics crosswalk
+  unesco:         () => get('/ethics/unesco'),
+
+  // AES-256-GCM mapping vault
+  vaultStats:     () => get('/vault/stats'),
+  detokenize:     (body) => post('/vault/detokenize', body),
 };

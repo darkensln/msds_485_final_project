@@ -15,5 +15,5 @@ echo === FinGuard Backend ===
 echo  Endpoints: http://localhost:8000/docs
 echo  Stop:      Ctrl+C
 echo.
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --reload-dir app --port 8000
 '@ | Set-Content -Path C:\fg10\run-backend.cmd -Encoding ascii

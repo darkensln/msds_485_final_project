@@ -35,7 +35,7 @@ export default function ErasureView({ role }) {
         <p className="text-sm text-slate-500">
           Submit a customer-erasure request. The platform cascades the deletion across
           every table containing that customer, unmaps their entries in the AES-256
-          vault, and records the event in the audit log within the 72-hour window.
+          vault, and records the event in the audit log. (GDPR Art. 12(3): respond within one month.)
         </p>
         {!authorized && (
           <div className="mt-3 text-sm text-finguard-red bg-finguard-red/10 border border-finguard-red/30 rounded px-3 py-2">

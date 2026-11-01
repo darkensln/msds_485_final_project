@@ -14,6 +14,9 @@ Endpoints:
     GET  /api/compliance/audit
     GET  /api/compliance/erasures
     POST /api/compliance/erasure
+    GET  /api/ethics/unesco            ← UNESCO AI Ethics crosswalk
+    GET  /api/vault/stats              ← AES-256-GCM vault telemetry
+    POST /api/vault/detokenize         ← Reverse a vault token (DPO/CDO only)
 """
 
 from __future__ import annotations
@@ -27,17 +30,18 @@ from pydantic import BaseModel
 
 from . import lineage as lineage_mod
 from . import catalog as catalog_mod
+from . import ethics as ethics_mod
 from .store import DataStore, TABLES
-from .rbac import ROLE_POLICY
+from .rbac import ROLE_POLICY, vault_stats, vault_detokenize_for_role
 
 
 # ---- Paths ----
 # Allow override via env so the same image can run elsewhere.
 ROOT = Path(__file__).resolve().parent.parent.parent  # finguard_week10/
 DATA_DIR = Path(os.environ.get("FINGUARD_DATA_DIR",
-                               ROOT.parent / "FinGuard_Synthetic_Datasets"))
+                               ROOT / "data" / "synthetic"))
 CATALOG_XLSX = Path(os.environ.get("FINGUARD_CATALOG",
-                                   ROOT.parent / "FinGuard_Data_Catalog.xlsx"))
+                                   ROOT / "data" / "FinGuard_Data_Catalog.xlsx"))
 
 
 # ---- App init ----
@@ -157,7 +161,7 @@ def compliance_metrics():
     return {
         "pii_columns": summary["pii_columns"],
         "pii_masked_columns": summary["pii_masked_columns"],
-        "vault_entries": 28893,
+        "vault_entries": 28893,  # Week 6 static reverse-mapping size (full_reverse_mapping.json); live AES vault count is in "vault"
         "erasures_processed": len(STORE.erasures()),
         "audit_log_entries": len(STORE.audit_log(limit=100000)),
         "access_denials_30d": STORE.access_denials_recent(30),
@@ -166,10 +170,12 @@ def compliance_metrics():
         "dq_columns_with_issue": summary["dq_columns_with_issue"],
         "by_classification": summary["by_classification"],
         "by_pii_type": summary["by_pii_type"],
-        # Hard-coded operational metrics from the project narrative
+        # Illustrative demo values (not computed) -- labelled as such in the UI
         "active_sars": 12,
         "quality_gate_pass_rate": 0.962,
-        "regulators_satisfied": ["GDPR", "GLBA", "PSD2", "EU AI Act", "CCPA", "EU AMLD"],
+        "regulators_satisfied": ["GDPR", "GLBA", "PSD2", "EU AI Act", "CCPA",
+                                 "EU AMLD", "UNESCO AI Ethics"],
+        "vault": vault_stats(),
     }
 
 
@@ -200,3 +206,37 @@ def submit_erasure(req: ErasureRequest):
     if not result.get("ok"):
         raise HTTPException(status_code=403, detail=result.get("error"))
     return result
+
+
+# ---- UNESCO AI Ethics crosswalk ----
+@app.get("/api/ethics/unesco")
+def ethics_unesco():
+    """UNESCO Recommendation on the Ethics of AI (2021) — FinGuard crosswalk."""
+    return ethics_mod.crosswalk()
+
+
+# ---- Vault (AES-256-GCM mapping vault) ----
+@app.get("/api/vault/stats")
+def get_vault_stats():
+    """Telemetry for the encrypted mapping vault — algorithm, key size, entries."""
+    return vault_stats()
+
+
+class DetokenizeRequest(BaseModel):
+    token: str
+    role: str = "dpo"
+
+
+@app.post("/api/vault/detokenize")
+def detokenize(req: DetokenizeRequest):
+    """Reverse a vault token. Only DPO/CDO may call this; everyone else is denied."""
+    if req.role not in ROLE_POLICY:
+        raise HTTPException(status_code=400, detail=f"unknown role {req.role}")
+    try:
+        plaintext = vault_detokenize_for_role(req.token, req.role)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    if plaintext is None:
+        return {"ok": False, "token": req.token,
+                "reason": "Token not found or already erased (GDPR Art. 17)"}
+    return {"ok": True, "token": req.token, "plaintext": plaintext, "role": req.role}

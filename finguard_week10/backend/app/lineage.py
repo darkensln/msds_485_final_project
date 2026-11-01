@@ -35,7 +35,7 @@ SYSTEM_NODES: List[Dict[str, Any]] = [
 
     # Privacy layer
     {"id": "mask_engine", "label": "Masking Engine (7 methods)", "kind": "process", "tier": "privacy"},
-    {"id": "vault",       "label": "Reversible Mapping Vault\n(AES-256, 28,893 entries)", "kind": "store", "tier": "privacy"},
+    {"id": "vault",       "label": "Reversible Mapping Vault\n(AES-256-GCM)", "kind": "store", "tier": "privacy"},
 
     # Consumption views
     {"id": "view_aml",    "label": "aml_transactions_masked",        "kind": "view", "tier": "consumption"},

@@ -9,7 +9,20 @@ Roles match Section 7 of the project handover:
 from __future__ import annotations
 import hashlib
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+# AES-256-GCM mapping vault — real reversible encryption.
+# (Was previously SHA-256 only, which is irreversible. See vault.py.)
+try:
+    from .vault import Vault, VaultError
+    _vault: Optional[Vault] = Vault.from_env()
+except Exception as _e:                                # pragma: no cover
+    # Cryptography library missing or key invalid — fall back to legacy hash
+    # so the app still boots, but log a clear warning.
+    import warnings
+    warnings.warn(f"Vault disabled, falling back to SHA-256 pseudonymization: {_e}",
+                  RuntimeWarning)
+    _vault = None
 
 
 # Per-role access policy.  "see_raw" means the role can see unmasked PII.
@@ -97,8 +110,64 @@ def _fpe_token(v: str) -> str:
 
 
 def _pseudo(v: Any, prefix: str = "TOKEN") -> str:
+    """Pseudonymize a value via the AES-256-GCM vault.
+
+    Same value always produces the same token (deterministic), so joins
+    across tables continue to work. The original value is recoverable only
+    by the DPO or CDO through `vault_detokenize_for_role()`.
+
+    Falls back to a SHA-256 hash if the vault is unavailable (preserves the
+    previous behaviour so the app keeps running even without `cryptography`).
+    """
+    if _vault is not None:
+        try:
+            token = _vault.tokenize(str(v))      # 'VLT_8fae31c2b41a...'
+            short = token.removeprefix("VLT_")[:8].upper()
+            return f"{prefix}_{short}"
+        except Exception:
+            pass
+    # Legacy fallback — irreversible.
     h = hashlib.sha256(str(v).encode()).hexdigest()[:6].upper()
     return f"{prefix}_{h}"
+
+
+def vault_detokenize_for_role(token_or_value: str, role: str) -> Optional[str]:
+    """API-layer helper: reverse a vault token, enforcing role policy.
+
+    The vault itself enforces `role in {'cdo','dpo'}`. We accept either
+    a raw 'VLT_...' token, or one of our prefixed forms like 'NAME_8FAE31C2'.
+    Returns None if the token cannot be reversed (unknown, erased, or
+    vault disabled).
+    """
+    if _vault is None:
+        return None
+    # Strip any '<prefix>_' so we get back the raw VLT_ token.
+    if "_" in token_or_value and not token_or_value.startswith("VLT_"):
+        short = token_or_value.split("_", 1)[1].lower()
+        # We stored a deterministic 8-byte hex digest. Search the vault.
+        for candidate, _blob in _vault._store.items():        # type: ignore[attr-defined]
+            if candidate.removeprefix("VLT_").startswith(short):
+                return _vault.detokenize(candidate, role=role)
+        return None
+    return _vault.detokenize(token_or_value, role=role)
+
+
+def vault_erase(value: str) -> int:
+    """GDPR Art. 17 — cryptographically erase a value from the vault.
+    Returns 1 if removed, 0 if not present or vault disabled.
+    """
+    if _vault is None:
+        return 0
+    return _vault.erase(str(value))
+
+
+def vault_stats() -> Dict[str, Any]:
+    """Return vault telemetry for the compliance dashboard."""
+    if _vault is None:
+        return {"enabled": False, "entries": 0, "algorithm": "n/a"}
+    s = _vault.stats()
+    return {"enabled": True, "entries": s["entries"],
+            "key_bits": s["key_bits"], "algorithm": "AES-256-GCM"}
 
 
 # Map column-name -> masking function.  Anything unmapped is passed through.

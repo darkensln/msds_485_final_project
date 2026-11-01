@@ -44,8 +44,9 @@ end-to-end. Aligned with slide 15 of `FinGuard_Week10_Final.pptx`.
 
 ### 4. Compliance Dashboard (Deliverable C) — 60 sec
 
-- KPI tiles: 24/24 PII masked, 28,893 vault entries, 4+ erasures processed,
-  29 RBAC denials, 12 active SARs, 96.2 % quality-gate pass rate.
+- KPI tiles: 24/26 PII columns masked, live AES-256-GCM vault count (fills as
+  masked rows are viewed), erasures processed (4 seeded + live), RBAC denials,
+  and two illustrative demo values (active SARs, quality-gate pass rate).
 - Charts: classification doughnut + PII-by-type bar.
 - Regulators-satisfied ribbon: GDPR, GLBA, PSD2, EU AI Act, CCPA, EU AMLD.
 - Audit log + erasure history at the bottom.
@@ -55,11 +56,24 @@ end-to-end. Aligned with slide 15 of `FinGuard_Week10_Final.pptx`.
 - Switch role to **Data Analyst** → open the **GDPR Erasure** tab. Submit
   button is disabled with a red warning banner.
 - Switch role to **DPO**. Submit an erasure for `CUST-00099` with the
-  default reason → success card appears, listing impacted tables.
+  default reason → success card appears, listing impacted tables and
+  **`vault_records_removed`** — the count of vault entries cryptographically
+  shredded for that customer.
 - Back to **Compliance Dashboard** → erasure now appears in the history,
   and an `ERASURE` entry is at the top of the audit log.
 
-### 6. (Optional) Show the deck — 30 sec
+### 6. AI Ethics / UNESCO crosswalk — 45 sec
+
+- Open the **AI Ethics (UNESCO)** tab.
+- Top banner shows the source: *UNESCO Recommendation on the Ethics of AI
+  (2021), unanimously adopted by 193 member states*.
+- Walk through the 4 foundational values, then expand 2-3 of the 10
+  principles — each one shows the specific FinGuard controls that satisfy it
+  (e.g. **Right to privacy** → AES-256 vault, 24 masked fields, Art. 17 erasure).
+- Talking point: *"30 FinGuard controls mapped to 10 UNESCO principles —
+  the same crosswalk the EU AI Act's high-risk system audit will demand."*
+
+### 7. (Optional) Show the deck — 30 sec
 
 - Open `FinGuard_Week10_Final.pptx` → slide 9 (Week 10 overview) and slide
   18 (closing pitch) for the storyline.
@@ -73,16 +87,24 @@ for analytics. Phones → partial masking for customer-service confirmation.
 IBANs/EINs → format-preserving encryption so downstream validators don't
 break. Slide 6 lists all seven.
 
+**Q: Is the AES-256 actually doing encryption or just labeled that way?**
+A: Real AES-256-GCM authenticated encryption — same algorithm used by TLS 1.3
+and Signal. You can hit `/api/vault/stats` to see live telemetry: algorithm,
+key bits, entry count. Try `POST /api/vault/detokenize` as a Data Analyst —
+HTTP 403. As DPO — HTTP 200 with the original plaintext.
+
 **Q: How does the reversible vault avoid being the next breach?**
-A: AES-256 at rest; access restricted to CDO and DPO only; mappings are
-stored in a JSON vault separate from analytics warehouses; every unlock
-is recorded in the audit log; entries are pruned when GDPR erasure fires.
+A: AES-256-GCM with the key held outside the application (env var → KMS in
+production); access restricted to CDO and DPO only; every unlock recorded
+in the audit log; entries cryptographically removed when GDPR erasure
+fires (after which even the DPO gets `None`).
 
 **Q: What happens end-to-end when a customer asks to be forgotten?**
 A: Slide 14: customer → DPO authenticates → cascade lookup across every
 table containing the customer_id → vault entries removed (so masked values
 can never be reversed again) → audit log records actor, timestamp, impact
-→ confirmation within the 72-hour GDPR window.
+→ confirmation within GDPR's one-month deadline (Art. 12(3)).
+(72 hours is the separate *breach-notification* deadline, Art. 33.)
 
 **Q: How does the AML model avoid proxy discrimination under EU AI Act?**
 A: We treat the model as high-risk under the Act: explicit human oversight
